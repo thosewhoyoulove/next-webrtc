@@ -41,6 +41,11 @@ export default function handler(req: NextApiRequest, res: ResponseWithSocket) {
             socket.on("ice-candidate", (data: RTCIceCandidate) => {
                 socket.to(roomId).emit("ice-candidate", data);
             });
+            // 监听用户离开房间
+            socket.on("leave-room", inviteCode => {
+                console.log("leave-room", inviteCode);
+                socket.to(inviteCode).emit("user-left"); // 通知房间里的其他用户
+            });
         });
     });
 
