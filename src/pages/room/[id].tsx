@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import io, { Socket } from "socket.io-client";
-import "../../styles/globals.css";
+// import "../../styles/globals.css";
 export default function RoomPage() {
     const router = useRouter();
     const { id: roomId } = router.query;

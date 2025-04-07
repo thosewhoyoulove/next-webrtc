@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { nanoid } from "nanoid";
-import "../styles/globals.css";
 export default function Home() {
     const [roomId, setRoomId] = useState("");
     const router = useRouter();
