@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { nanoid } from "nanoid";
-
+import "../styles/globals.css";
 export default function Home() {
     const [roomId, setRoomId] = useState("");
     const router = useRouter();
@@ -31,61 +31,20 @@ export default function Home() {
     };
 
     return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100vh",
-                backgroundColor: "#1e1e1e",
-                color: "#fff",
-            }}
-        >
-            <h1 style={{ fontSize: "2rem", marginBottom: "1rem" }}>Enter Meeting Room</h1>
-            <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
-                <input
-                    value={roomId}
-                    onChange={e => setRoomId(e.target.value)}
-                    placeholder="Enter Room ID"
-                    style={{
-                        padding: "0.5rem",
-                        fontSize: "1rem",
-                        borderRadius: "6px",
-
-                        width: "200px",
-                    }}
-                />
-                <button onClick={pasteFromClipboard} style={{ padding: "0.5rem", fontSize: "1rem", marginLeft: "10px" }}>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
+            <h1 className="text-3xl mb-4">Enter Meeting Room</h1>
+            <div className="flex gap-4 items-center mb-4">
+                <input value={roomId} onChange={e => setRoomId(e.target.value)} placeholder="Enter Room ID" className="px-4 py-2 text-base rounded-md bg-white text-black w-48" />
+                <button onClick={pasteFromClipboard} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg cursor-pointer">
                     粘贴
                 </button>
             </div>
-            <div style={{ display: "flex", gap: "1rem" }}>
-                <button
-                    onClick={joinRoom}
-                    style={{
-                        padding: "0.5rem 1rem",
-                        fontSize: "1rem",
-                        borderRadius: "6px",
-                        backgroundColor: "#0070f3",
-                        color: "#fff",
-                        cursor: "pointer",
-                    }}
-                >
-                    Join Room
-                </button>
-                <button
-                    onClick={createRoom}
-                    style={{
-                        padding: "0.5rem 1rem",
-                        fontSize: "1rem",
-                        borderRadius: "6px",
-                        backgroundColor: "#28a745",
-                        color: "#fff",
-                        cursor: "pointer",
-                    }}
-                >
+            <div className="flex gap-4">
+                <button onClick={createRoom} className="px-4 py-2 text-base rounded-md bg-green-500 hover:bg-green-600 text-white cursor-pointer">
                     Create Room
+                </button>
+                <button onClick={joinRoom} className="px-4 py-2 text-base rounded-md bg-blue-500 hover:bg-blue-600 text-white cursor-pointer">
+                    Join Room
                 </button>
             </div>
         </div>

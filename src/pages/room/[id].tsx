@@ -12,6 +12,11 @@ export default function RoomPage() {
     const [isMuted, setIsMuted] = useState(false);
     const [videoEnabled, setVideoEnabled] = useState(true);
     const [peerLeft, setPeerLeft] = useState(false);
+    const [recording, setRecording] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<Blob[]>([]);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const animationFrameRef = useRef<number | undefined>(undefined);
     useEffect(() => {
         if (!roomId) return;
 
@@ -97,6 +102,86 @@ export default function RoomPage() {
         router.push("/"); // 退出会议后返回主页
     };
 
+    const startCanvasRecording = () => {
+        const localVideo = localVideoRef.current;
+        const remoteVideo = remoteVideoRef.current;
+
+        if (!localVideo || !remoteVideo) {
+            alert("视频还没准备好");
+            return;
+        }
+
+        // 创建 Canvas
+        const canvas = document.createElement("canvas");
+        const width = 1280;
+        const height = 720;
+        canvas.width = width;
+        canvas.height = height;
+        canvasRef.current = canvas;
+        const ctx = canvas.getContext("2d");
+
+        const drawFrame = () => {
+            if (!ctx) return;
+
+            // 清屏
+            ctx.clearRect(0, 0, width, height);
+
+            // 画本地视频到左边
+            ctx.drawImage(localVideo, 0, 0, width / 2, height);
+
+            // 画远程视频到右边
+            ctx.drawImage(remoteVideo, width / 2, 0, width / 2, height);
+
+            animationFrameRef.current = requestAnimationFrame(drawFrame);
+        };
+
+        drawFrame();
+
+        // 开始录制 canvas 的画面
+        const canvasStream = canvas.captureStream(30); // 30 FPS
+        const audioStream = new MediaStream();
+
+        // 把本地 + 远程音轨都合并进去
+        const localStream = localVideo.srcObject as MediaStream;
+        const remoteStream = remoteVideo.srcObject as MediaStream;
+
+        localStream.getAudioTracks().forEach(track => audioStream.addTrack(track));
+        remoteStream.getAudioTracks().forEach(track => audioStream.addTrack(track));
+
+        const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
+
+        const mediaRecorder = new MediaRecorder(combinedStream);
+        mediaRecorderRef.current = mediaRecorder;
+        recordedChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = event => {
+            if (event.data.size > 0) {
+                recordedChunksRef.current.push(event.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            cancelAnimationFrame(animationFrameRef.current!);
+
+            const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `canvas-recording-${Date.now()}.webm`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        mediaRecorder.start();
+        setRecording(true);
+    };
+
+    const stopRecording = () => {
+        mediaRecorderRef.current?.stop();
+        setRecording(false);
+    };
+
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
             <h1>{peerLeft && <p className="text-red-500 mb-4">The other user has left the meeting.</p>}</h1>
@@ -126,6 +211,15 @@ export default function RoomPage() {
                 <button className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg cursor-pointer min-w-[140px]" onClick={leaveMeeting}>
                     Leave Meeting
                 </button>
+                {!recording ? (
+                    <button className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg" onClick={startCanvasRecording}>
+                        录制合成画面
+                    </button>
+                ) : (
+                    <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg" onClick={stopRecording}>
+                        停止录制
+                    </button>
+                )}
             </div>
         </div>
     );
