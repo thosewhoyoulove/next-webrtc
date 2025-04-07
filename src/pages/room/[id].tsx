@@ -20,7 +20,9 @@ export default function RoomPage() {
     useEffect(() => {
         if (!roomId) return;
 
-        socketRef.current = io();
+        // socketRef.current = io();
+        socketRef.current = io("http://192.3.0.173:3001"); // 连接远程 Socket 服务
+
         navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
             if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
