@@ -20,52 +20,61 @@ export default function RoomPage() {
     useEffect(() => {
         if (!roomId) return;
 
-        // socketRef.current = io();
-        socketRef.current = io("http://192.3.0.173:3001"); // 连接远程 Socket 服务
+        socketRef.current = io();
+        // socketRef.current = io("http://192.3.0.173:3001"); // 连接远程 Socket 服务
 
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
-            if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        navigator.mediaDevices
+            .getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 },
+                },
+                audio: true,
+            })
+            .then(stream => {
+                if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-            peerRef.current = new RTCPeerConnection();
-            stream.getTracks().forEach(track => peerRef.current?.addTrack(track, stream));
+                peerRef.current = new RTCPeerConnection();
+                stream.getTracks().forEach(track => peerRef.current?.addTrack(track, stream));
 
-            peerRef.current.ontrack = event => {
-                if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
-            };
+                peerRef.current.ontrack = event => {
+                    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+                };
 
-            peerRef.current.onicecandidate = event => {
-                if (event.candidate) socketRef.current?.emit("ice-candidate", { candidate: event.candidate, roomId });
-            };
+                peerRef.current.onicecandidate = event => {
+                    if (event.candidate) socketRef.current?.emit("ice-candidate", { candidate: event.candidate, roomId });
+                };
 
-            socketRef.current?.emit("join-room", roomId);
+                socketRef.current?.emit("join-room", roomId);
 
-            socketRef.current?.on("user-joined", async () => {
-                const offer = await peerRef.current?.createOffer();
-                await peerRef.current?.setLocalDescription(offer);
-                socketRef.current?.emit("offer", { offer, roomId });
+                socketRef.current?.on("user-joined", async () => {
+                    const offer = await peerRef.current?.createOffer();
+                    await peerRef.current?.setLocalDescription(offer);
+                    socketRef.current?.emit("offer", { offer, roomId });
+                });
+
+                socketRef.current?.on("offer", async ({ offer }) => {
+                    await peerRef.current?.setRemoteDescription(new RTCSessionDescription(offer));
+                    const answer = await peerRef.current?.createAnswer();
+                    await peerRef.current?.setLocalDescription(answer);
+                    socketRef.current?.emit("answer", { answer, roomId });
+                });
+
+                socketRef.current?.on("answer", ({ answer }) => {
+                    peerRef.current?.setRemoteDescription(new RTCSessionDescription(answer));
+                });
+
+                socketRef.current?.on("ice-candidate", ({ candidate }) => {
+                    peerRef.current?.addIceCandidate(new RTCIceCandidate(candidate));
+                });
+                socketRef.current?.on("user-left", () => {
+                    setPeerLeft(true);
+                    if (remoteVideoRef.current) {
+                        remoteVideoRef.current.srcObject = null;
+                    }
+                });
             });
-
-            socketRef.current?.on("offer", async ({ offer }) => {
-                await peerRef.current?.setRemoteDescription(new RTCSessionDescription(offer));
-                const answer = await peerRef.current?.createAnswer();
-                await peerRef.current?.setLocalDescription(answer);
-                socketRef.current?.emit("answer", { answer, roomId });
-            });
-
-            socketRef.current?.on("answer", ({ answer }) => {
-                peerRef.current?.setRemoteDescription(new RTCSessionDescription(answer));
-            });
-
-            socketRef.current?.on("ice-candidate", ({ candidate }) => {
-                peerRef.current?.addIceCandidate(new RTCIceCandidate(candidate));
-            });
-            socketRef.current?.on("user-left", () => {
-                setPeerLeft(true);
-                if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = null;
-                }
-            });
-        });
 
         return () => {
             socketRef.current?.emit("leave-room", roomId);
@@ -76,8 +85,13 @@ export default function RoomPage() {
 
     const toggleMute = () => {
         const stream = localVideoRef.current?.srcObject as MediaStream;
-        stream?.getAudioTracks().forEach(track => (track.enabled = !isMuted));
-        setIsMuted(!isMuted);
+        const newMuted = !isMuted; // 手动计算新状态
+
+        stream?.getAudioTracks().forEach(track => {
+            track.enabled = !newMuted; // true 表示有声音
+        });
+
+        setIsMuted(newMuted);
     };
 
     const toggleVideo = () => {
