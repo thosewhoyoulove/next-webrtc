@@ -5,7 +5,7 @@ export default function Home() {
     const [roomId, setRoomId] = useState("");
     const router = useRouter();
     useEffect(() => {
-        fetch("/api/socket");
+        fetch("/api/server");
     }, []);
     const joinRoom = () => {
         if (roomId.trim()) {

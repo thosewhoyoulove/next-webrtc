@@ -15,15 +15,28 @@ interface ResponseWithSocket extends NextApiResponse {
     socket: SocketWithIO;
 }
 
+export const config = {
+    api: {
+        bodyParser: false,
+    },
+};
+
 export default function handler(req: NextApiRequest, res: ResponseWithSocket) {
     if (res.socket.server.io) {
         console.log("Socket is already running");
         res.end();
         return;
     }
-
+    console.log("EEEEEEE");
     const io = new Server(res.socket.server);
-    res.socket.server.io = io;
+
+    // 错误处理
+    io.engine.on("connection_error", err => {
+        console.log("连接错误:", err.req);
+        console.log("错误代码:", err.code);
+        console.log("错误消息:", err.message);
+        console.log("错误上下文:", err.context);
+    });
 
     io.on("connection", socket => {
         socket.on("join-room", (roomId: string) => {
@@ -48,6 +61,8 @@ export default function handler(req: NextApiRequest, res: ResponseWithSocket) {
             });
         });
     });
+
+    res.socket.server.io = io;
 
     res.end();
 }
