@@ -198,40 +198,43 @@ export default function RoomPage() {
     };
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-6">
-            <h1>{peerLeft && <p className="text-red-500 mb-4">The other user has left the meeting.</p>}</h1>
-            <div className="flex items-center gap-4 mb-6">
-                <h1 className="font-bold text-2xl">Room ID: {roomId}</h1>
-                <button onClick={copyToClipboard} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg cursor-pointer">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white px-4 py-8">
+            <h1 className="mb-4 text-center">{peerLeft && <p className="text-red-500">The other user has left the meeting.</p>}</h1>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 w-full max-w-3xl justify-center text-center sm:text-left">
+                <h1 className="font-bold text-xl sm:text-2xl break-words">Room ID: {roomId}</h1>
+                <button onClick={copyToClipboard} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto">
                     复制房间 ID
                 </button>
             </div>
-            <div className="grid grid-cols-2 gap-4 w-full max-w-4xl">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-4xl">
                 <div className="relative border-2 border-gray-700 rounded-lg overflow-hidden">
                     <p className="absolute top-2 left-2 bg-gray-700 px-2 py-1 text-sm rounded">You {isMuted ? "🔇" : "🔊"}</p>
-                    <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-64 bg-black" />
+                    <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-64 sm:h-72 bg-black" />
                 </div>
                 <div className="relative border-2 border-gray-700 rounded-lg overflow-hidden">
                     <p className="absolute top-2 left-2 bg-gray-700 px-2 py-1 text-sm rounded">Peer</p>
-                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-64 bg-black" />
+                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-64 sm:h-72 bg-black" />
                 </div>
             </div>
-            <div className="flex gap-4 mt-6">
-                <button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg cursor-pointer min-w-[120px]" onClick={toggleMute}>
+
+            <div className="flex flex-col sm:flex-row gap-4 mt-6 w-full max-w-4xl">
+                <button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={toggleMute}>
                     {isMuted ? "Unmute" : "Mute"}
                 </button>
-                <button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg cursor-pointer min-w-[160px]" onClick={toggleVideo}>
+                <button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={toggleVideo}>
                     {videoEnabled ? "Turn Off Video" : "Turn On Video"}
                 </button>
-                <button className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg cursor-pointer min-w-[140px]" onClick={leaveMeeting}>
+                <button className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={leaveMeeting}>
                     Leave Meeting
                 </button>
                 {!recording ? (
-                    <button className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg" onClick={startCanvasRecording}>
+                    <button className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={startCanvasRecording}>
                         录制合成画面
                     </button>
                 ) : (
-                    <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg" onClick={stopRecording}>
+                    <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={stopRecording}>
                         停止录制
                     </button>
                 )}
