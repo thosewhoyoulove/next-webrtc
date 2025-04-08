@@ -20,7 +20,7 @@ export default function RoomPage() {
     useEffect(() => {
         if (!roomId) return;
         // socketRef.current = io(); // 连接本地 Socket 服务
-        socketRef.current = io("http://192.3.0.173:3001"); // 连接远程 Socket 服务
+        socketRef.current = io("https://webrtc.peterroe.me/"); // 连接远程 Socket 服务
 
         navigator.mediaDevices
             .getUserMedia({
@@ -204,7 +204,7 @@ export default function RoomPage() {
             <div className="flex flex-col sm:flex-row items-center gap-4 mb-6 w-full max-w-3xl justify-center text-center sm:text-left">
                 <h1 className="font-bold text-xl sm:text-2xl break-words">Room ID: {roomId}</h1>
                 <button onClick={copyToClipboard} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto">
-                    复制房间 ID
+                    Copy Room ID
                 </button>
             </div>
 
@@ -219,7 +219,7 @@ export default function RoomPage() {
                 </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 mt-6 w-full max-w-4xl">
+            <div className="flex flex-col justify-center sm:flex-row gap-4 mt-6 w-full max-w-4xl ">
                 <button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={toggleMute}>
                     {isMuted ? "Unmute" : "Mute"}
                 </button>
@@ -231,11 +231,11 @@ export default function RoomPage() {
                 </button>
                 {!recording ? (
                     <button className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={startCanvasRecording}>
-                        录制合成画面
+                        Record
                     </button>
                 ) : (
                     <button className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg w-full sm:w-auto" onClick={stopRecording}>
-                        停止录制
+                        Stop Recording
                     </button>
                 )}
             </div>
