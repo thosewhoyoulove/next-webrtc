@@ -1,12 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/router";
 import { nanoid } from "nanoid";
 export default function Home() {
     const [roomId, setRoomId] = useState("");
     const router = useRouter();
-    useEffect(() => {
-        fetch("/api/server");
-    }, []);
+
     const joinRoom = () => {
         if (roomId.trim()) {
             router.push(`/room/${roomId}`);

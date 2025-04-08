@@ -19,8 +19,8 @@ export default function RoomPage() {
     const animationFrameRef = useRef<number | undefined>(undefined);
     useEffect(() => {
         if (!roomId) return;
-        socketRef.current = io(); // 连接本地 Socket 服务
-        // socketRef.current = io("http://192.3.0.173:3001"); // 连接远程 Socket 服务
+        // socketRef.current = io(); // 连接本地 Socket 服务
+        socketRef.current = io("http://192.3.0.173:3001"); // 连接远程 Socket 服务
 
         navigator.mediaDevices
             .getUserMedia({
