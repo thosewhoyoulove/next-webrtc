@@ -121,6 +121,7 @@ export default function RoomContent() {
         const newMuted = !isMuted;
         stream?.getAudioTracks().forEach(track => (track.enabled = !newMuted));
         setIsMuted(newMuted);
+        socketRef.current?.emit("toggle-audio", { isAudioEnabled: newMuted });
     };
 
     // 视频控制：切换视频开启状态
