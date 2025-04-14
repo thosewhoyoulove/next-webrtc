@@ -13,6 +13,9 @@ export default function Home() {
             setLastRoomId(stored);
         }
     }, []);
+    // useEffect(() => {
+    //     fetch("/api/server");
+    // }, []);
     const joinRoom = () => {
         if (roomId.trim()) {
             router.push(`/room/${roomId}`);

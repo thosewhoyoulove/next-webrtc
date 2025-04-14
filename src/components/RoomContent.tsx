@@ -32,7 +32,8 @@ export default function RoomContent() {
 
     // 语音识别 Hook
     const { subtitle, startRecognition, stopRecognition } = useSubtitleRecognizer("zh-CN");
-
+    //获取对方的音量是否开关
+    const [peerVolume, setPeerVolume] = useState(true);
     // 核心的 WebRTC 连接逻辑
     useEffect(() => {
         if (!roomId) return;
@@ -41,7 +42,7 @@ export default function RoomContent() {
 
         // 连接信令服务器
         socketRef.current = io("https://webrtc.peterroe.me/");
-
+        // socketRef.current = io();
         // 获取本地媒体流
         navigator.mediaDevices
             .getUserMedia({
@@ -106,6 +107,11 @@ export default function RoomContent() {
                         remoteVideoRef.current.srcObject = null;
                     }
                 });
+
+                // 监听对方的音频状态变化
+                socketRef.current?.on("user-audio-toggle", ({ isAudioEnabled }) => {
+                    setPeerVolume(isAudioEnabled);
+                });
             });
 
         // 清理函数
@@ -119,9 +125,12 @@ export default function RoomContent() {
     const toggleMute = () => {
         const stream = localVideoRef.current?.srcObject as MediaStream;
         const newMuted = !isMuted;
+        // 设置本地音轨状态
         stream?.getAudioTracks().forEach(track => (track.enabled = !newMuted));
+        // 更新本地静音状态
         setIsMuted(newMuted);
-        socketRef.current?.emit("toggle-audio", { isAudioEnabled: newMuted });
+        // 通知其他用户音频状态变化
+        socketRef.current?.emit("toggle-audio", { isAudioEnabled: !newMuted });
     };
 
     // 视频控制：切换视频开启状态
@@ -261,7 +270,7 @@ export default function RoomContent() {
                 </div>
                 {/* 远程视频 */}
                 <div className="relative border-2 border-gray-700 rounded-lg overflow-hidden">
-                    <p className="absolute top-2 left-2 bg-gray-700 px-2 py-1 text-sm rounded">Peer</p>
+                    <p className="absolute top-2 left-2 bg-gray-700 px-2 py-1 text-sm rounded">Peer {peerVolume ? "🔊" : "🔇"}</p>
                     <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-64 sm:h-72 bg-black" />
                 </div>
             </div>

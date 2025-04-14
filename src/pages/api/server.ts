@@ -27,7 +27,7 @@ export default function handler(req: NextApiRequest, res: ResponseWithSocket) {
         res.end();
         return;
     }
-    console.log("EEEEEEE");
+    console.log("Setting up socket");
     const io = new Server(res.socket.server);
 
     // 错误处理
@@ -43,26 +43,41 @@ export default function handler(req: NextApiRequest, res: ResponseWithSocket) {
             socket.join(roomId);
             socket.to(roomId).emit("user-joined", socket.id);
 
-            socket.on("offer", (data: RTCSessionDescriptionInit) => {
+            socket.on("offer", (data: { offer: RTCSessionDescriptionInit; roomId: string }) => {
                 socket.to(roomId).emit("offer", data);
             });
 
-            socket.on("answer", (data: RTCSessionDescriptionInit) => {
+            socket.on("answer", (data: { answer: RTCSessionDescriptionInit; roomId: string }) => {
                 socket.to(roomId).emit("answer", data);
             });
 
-            socket.on("ice-candidate", (data: RTCIceCandidate) => {
+            socket.on("ice-candidate", (data: { candidate: RTCIceCandidate; roomId: string }) => {
                 socket.to(roomId).emit("ice-candidate", data);
             });
-            // 监听用户离开房间
-            socket.on("leave-room", inviteCode => {
-                console.log("leave-room", inviteCode);
-                socket.to(inviteCode).emit("user-left"); // 通知房间里的其他用户
+
+            // 处理音频状态变化
+            socket.on("toggle-audio", (data: { isAudioEnabled: boolean }) => {
+                console.log(`用户 ${socket.id} ${data.isAudioEnabled ? "打开" : "关闭"}了音频`);
+                socket.to(roomId).emit("user-audio-toggle", {
+                    userId: socket.id,
+                    isAudioEnabled: data.isAudioEnabled,
+                });
             });
+
+            // 监听用户离开房间
+            socket.on("leave-room", () => {
+                console.log(`用户 ${socket.id} 离开了房间 ${roomId}`);
+                socket.to(roomId).emit("user-left");
+                socket.leave(roomId);
+            });
+        });
+
+        // 处理断开连接
+        socket.on("disconnect", () => {
+            console.log(`用户 ${socket.id} 断开连接`);
         });
     });
 
     res.socket.server.io = io;
-
     res.end();
 }
