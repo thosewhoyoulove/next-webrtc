@@ -8,7 +8,8 @@
         "server": "node server/index.js",
         "build": "next build",
         "start": "next start",
-        "lint": "next lint"
+        "lint": "next lint",
+        "spot:screener": "node scripts/spot-screener.js"
     },
     "dependencies": {
         "express": "^4.21.2",
