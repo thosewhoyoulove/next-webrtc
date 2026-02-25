@@ -70,11 +70,22 @@ export default function handler(req: NextApiRequest, res: ResponseWithSocket) {
                 socket.to(roomId).emit("user-left");
                 socket.leave(roomId);
             });
+
+            // 转发聊天消息
+            socket.on("chat-message", (data: { text: string; time: string }) => {
+                socket.to(roomId).emit("chat-message", data);
+            });
         });
 
         // 处理断开连接
         socket.on("disconnect", () => {
             console.log(`用户 ${socket.id} 断开连接`);
+            // 找到该用户所在的所有房间，并通知对方
+            socket.rooms.forEach(room => {
+                if (room !== socket.id) {
+                    socket.to(room).emit("user-left");
+                }
+            });
         });
     });
 
