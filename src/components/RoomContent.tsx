@@ -383,7 +383,7 @@ export default function RoomContent() {
             </header>
 
             {/* ==================== Main Area ==================== */}
-            <main className="z-10 flex flex-1 gap-4 p-4 overflow-hidden">
+            <main className="z-10 flex flex-1 gap-4 p-4 overflow-hidden relative">
 
                 {/* --- Video Area --- */}
                 <div className="flex flex-col flex-1 gap-4 min-w-0">
@@ -419,10 +419,10 @@ export default function RoomContent() {
                             </div>
                         </div>
                     ) : (
-                        /* Connected: dual video grid */
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+                        /* Connected: dual video flex layout */
+                        <div className="flex flex-col sm:flex-row gap-4 flex-1 min-h-0">
                             {/* Local Video */}
-                            <div className="relative group rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/50 shadow-lg aspect-video">
+                            <div className="relative flex-1 group rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/50 shadow-lg min-h-0">
                                 <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none" />
                                 <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2.5 py-1 bg-black/50 backdrop-blur-md border border-slate-700/80 rounded-full">
                                     <span className="text-[10px] font-bold tracking-widest text-slate-300 uppercase">Local // You</span>
@@ -434,7 +434,7 @@ export default function RoomContent() {
                                 <video ref={localVideoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${videoEnabled ? "opacity-100" : "opacity-0"}`} />
                             </div>
                             {/* Remote Video */}
-                            <div className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/50 shadow-lg aspect-video">
+                            <div className="relative flex-1 rounded-2xl overflow-hidden bg-slate-900 border border-slate-700/50 shadow-lg min-h-0">
                                 <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/60 to-transparent z-10 pointer-events-none" />
                                 <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2.5 py-1 bg-black/50 backdrop-blur-md border border-slate-700/80 rounded-full">
                                     <span className="text-[10px] font-bold tracking-widest text-slate-300 uppercase">Remote // Peer</span>
@@ -455,7 +455,7 @@ export default function RoomContent() {
 
                 {/* ==================== Feature 3: Chat Panel ==================== */}
                 {isChatOpen && (
-                    <aside className="z-10 flex flex-col w-72 lg:w-80 flex-shrink-0 bg-slate-900/70 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-xl overflow-hidden">
+                    <aside className="absolute inset-4 z-30 sm:static flex flex-col sm:w-72 lg:w-80 flex-shrink-0 bg-slate-900/95 sm:bg-slate-900/70 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl sm:shadow-xl overflow-hidden">
                         {/* Chat header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 bg-slate-800/50">
                             <p className="text-sm font-bold text-slate-200 tracking-wide">Session Chat</p>
