@@ -109,7 +109,13 @@ export default function RoomContent() {
             .then(stream => {
                 if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-                peerRef.current = new RTCPeerConnection();
+                peerRef.current = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: "stun:stun.l.google.com:19302" },
+                        { urls: "stun:stun1.l.google.com:19302" },
+                        { urls: "stun:stun2.l.google.com:19302" },
+                    ],
+                });
                 stream.getTracks().forEach(track => peerRef.current?.addTrack(track, stream));
 
                 // Remote video track
