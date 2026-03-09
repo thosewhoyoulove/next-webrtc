@@ -46,9 +46,10 @@ export default function RoomContent() {
         // socketRef.current = io();
         // 获取本地媒体流
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("无法访问摄像头/麦克风，请确保使用 HTTPS 访问本站");
+            alert("无法访问媒体设备。请确保您使用 HTTPS 协议或 localhost 访问，并且浏览器支持 WebRTC。");
             return;
         }
+
         navigator.mediaDevices
             .getUserMedia({
                 video: {
