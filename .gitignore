@@ -41,3 +41,5 @@ yarn-error.log*
 next-env.d.ts
 
 apps/web/.next
+.turbo
+apps/web/.turbo
