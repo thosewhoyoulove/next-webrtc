@@ -38,6 +38,33 @@ bun dev
 
 在浏览器中打开 [http://localhost:3000](http://localhost:3000) 即可访问应用。
 
+## 小工具：现货短线筛选脚本（仅供学习研究）
+
+项目内置一个零依赖 Node 脚本，会从交易所**公共接口**拉取数据，按**短周期动量/成交额/RSI/波动**等做“候选清单”排序输出（不保证盈利，不构成投资建议）。默认使用 Coinbase Exchange；如果你的环境可访问 Binance，也可以切换。
+
+运行：
+
+```bash
+npm run spot:screener
+```
+
+常用参数示例：
+
+```bash
+node scripts/spot-screener.js --exchange coinbase --quote USD --top 80 --analyze 30 --minQuoteVol 50000000 --out 20
+node scripts/spot-screener.js --exchange binance --quote USDT --top 80 --analyze 30 --minQuoteVol 50000000 --out 20
+```
+
+参数说明（可选）：
+
+- `--exchange`：`coinbase` 或 `binance`（默认 `coinbase`；binance 在部分地区/环境可能 451）
+- `--quote`：计价币（默认 `USD`，在 `--exchange binance` 时通常用 `USDT`）
+- `--top`：按 24h 计价成交额选前 N 个候选（默认 `80`）
+- `--analyze`：对候选中前 N 个做 K 线分析（默认 `30`）
+- `--minQuoteVol`：24h 计价成交额阈值（默认 `20000000`）
+- `--out`：输出行数（默认 `15`）
+- `--exclude`：排除符号正则（默认排除杠杆代币，如 `.*(UP|DOWN|BULL|BEAR)USDT$`）
+
 ## 本地开发设置
 
 1. 克隆项目
