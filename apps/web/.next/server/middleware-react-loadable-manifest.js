@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST='{"pages/room/[id].tsx -> ../../components/RoomContent":{"id":5087,"files":["static/chunks/395.90fa5d81679726e6.js","static/chunks/87.a936f541ed2de7ef.js"]}}';
