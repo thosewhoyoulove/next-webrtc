@@ -38,6 +38,7 @@ bun dev
 
 在浏览器中打开 [http://localhost:3000](http://localhost:3000) 即可访问应用。
 
+使用代理cloudflared tunnel --url http://localhost:3000
 ## 本地开发设置
 
 1. 克隆项目
