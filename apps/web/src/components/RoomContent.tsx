@@ -24,6 +24,7 @@ const logger = {
 export default function RoomContent() {
     const router = useRouter();
     const { id: roomId } = router.query;
+    const [roomLink, setRoomLink] = useState("");
 
     // 视频相关的 ref
     const localVideoRef = useRef<HTMLVideoElement>(null); // 本地视频元素引用
@@ -39,10 +40,14 @@ export default function RoomContent() {
     // UI 状态管理
     const [isMuted, setIsMuted] = useState(false); // 静音状态
     const [videoEnabled, setVideoEnabled] = useState(true); // 视频开启状态
-    const [peerLeft, setPeerLeft] = useState(false); // 对方是否离开
+    const [peerLeft, setPeerLeft] = useState(true); // 对方是否离开
     const [recording, setRecording] = useState(false); // 录制状态
     const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting'); // 连接状态
     const [copied, setCopied] = useState(false); // 复制状态
+    const [shareCopied, setShareCopied] = useState(false);
+    const [callSeconds, setCallSeconds] = useState(0);
+    const [displayName, setDisplayName] = useState("你");
+    const [focusMode, setFocusMode] = useState(false);
 
     // 录制相关的 ref
     const mediaRecorderRef = useRef<MediaRecorder | null>(null); // 媒体录制器引用
@@ -58,6 +63,32 @@ export default function RoomContent() {
     useEffect(() => {
         subtitleRef.current = subtitle;
     }, [subtitle]);
+
+    useEffect(() => {
+        const storedName = localStorage.getItem("displayName");
+        if (storedName) {
+            setDisplayName(storedName);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            setRoomLink(window.location.href);
+        }
+    }, [roomId]);
+
+    useEffect(() => {
+        if (peerLeft) {
+            setCallSeconds(0);
+            return;
+        }
+
+        const timer = window.setInterval(() => {
+            setCallSeconds(prev => prev + 1);
+        }, 1000);
+
+        return () => window.clearInterval(timer);
+    }, [peerLeft]);
 
     const cleanupRoomResources = useCallback((currentRoomId?: string | string[]) => {
         const room = typeof currentRoomId === "string" ? currentRoomId : undefined;
@@ -247,6 +278,8 @@ export default function RoomContent() {
                 socketRef.current?.on("user-left", () => {
                     logger.warn('对方用户离开');
                     setPeerLeft(true);
+                    setPeerVolume(true);
+                    remoteStreamRef.current = null;
                     if (remoteVideoRef.current) {
                         remoteVideoRef.current.srcObject = null;
                     }
@@ -332,6 +365,27 @@ export default function RoomContent() {
         logger.info('用户主动离开会议');
         cleanupRoomResources(roomId);
         router.push("/");
+    };
+
+    const shareRoom = async () => {
+        if (!roomLink) return;
+
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: "FlowCall Meeting",
+                    text: `加入我的会议房间：${roomId}`,
+                    url: roomLink,
+                });
+                return;
+            }
+
+            await navigator.clipboard.writeText(roomLink);
+            setShareCopied(true);
+            setTimeout(() => setShareCopied(false), 2000);
+        } catch (error) {
+            logger.error("分享房间失败", error);
+        }
     };
 
     // 开始录制会议
@@ -439,173 +493,230 @@ export default function RoomContent() {
         stopRecognition();
     };
 
+    const formatDuration = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        return [hours, minutes, seconds]
+            .filter((value, index) => value > 0 || index > 0)
+            .map(value => value.toString().padStart(2, "0"))
+            .join(":");
+    };
+
+    const remoteStatusLabel = peerLeft ? "等待加入" : "通话中";
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-            {/* 头部状态栏 */}
-            <div className="sticky top-0 z-50 bg-black/30 backdrop-blur-md border-b border-white/10">
-                <div className="container mx-auto px-4 py-3">
-                    <div className="flex items-center justify-between">
-                        {/* 连接状态指示器 */}
-                        <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full animate-pulse ${
-                                connectionStatus === 'connected' ? 'bg-green-400' :
-                                connectionStatus === 'connecting' ? 'bg-yellow-400' : 'bg-red-400'
-                            }`} />
-                            <span className="text-xs text-gray-300">
-                                {connectionStatus === 'connected' ? '已连接' :
-                                 connectionStatus === 'connecting' ? '连接中...' : '连接断开'}
-                            </span>
-                        </div>
-                        
-                        {/* 房间信息 */}
-                        <div className="text-center">
-                            <div className="text-sm font-mono bg-white/10 px-3 py-1 rounded-full">
-                                房间: {roomId}
-                            </div>
-                        </div>
-                        
-                        {/* 占位符保持平衡 */}
-                        <div className="w-16" />
-                    </div>
-                </div>
-            </div>
+        <div className="relative min-h-screen overflow-hidden text-white">
+            <div className="soft-grid absolute inset-0 opacity-30" />
+            <div className="pointer-events-none absolute left-0 top-24 h-64 w-64 rounded-full bg-cyan-400/12 blur-3xl" />
+            <div className="pointer-events-none absolute right-0 top-1/4 h-72 w-72 rounded-full bg-orange-400/10 blur-3xl" />
 
-            {/* 主要内容区域 */}
-            <div className="container mx-auto px-4 py-6">
-                {/* 状态提示 */}
-                {peerLeft && (
-                    <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-center animate-pulse">
-                        <p className="text-red-300">对方已离开会议</p>
-                    </div>
-                )}
-
-                {/* 房间信息区域 */}
-                <div className="mb-8 text-center">
-                    <h1 className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                        WebRTC 视频会议
-                    </h1>
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <div className="font-mono text-lg bg-white/10 px-4 py-2 rounded-lg">
-                            ID: {roomId}
-                        </div>
-                        <button 
-                            onClick={copyToClipboard} 
-                            className={`px-6 py-2 rounded-lg font-medium transition-all transform hover:scale-105 ${
-                                copied 
-                                    ? 'bg-green-500 text-white' 
-                                    : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                            }`}
-                        >
-                            {copied ? '✓ 已复制' : '📋 复制ID'}
-                        </button>
-                    </div>
-                </div>
-
-                {/* 视频显示区域 */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    {/* 本地视频 */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all" />
-                        <div className="relative bg-black rounded-xl overflow-hidden border border-white/20 shadow-2xl">
-                            <div className="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg flex items-center gap-2">
-                                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                                <span className="text-sm font-medium">你</span>
-                                {isMuted && <span className="text-red-400">🔇</span>}
-                                {!videoEnabled && <span className="text-gray-400">📹</span>}
-                            </div>
-                            <video 
-                                ref={localVideoRef} 
-                                autoPlay 
-                                playsInline 
-                                muted 
-                                className="w-full aspect-video bg-black object-cover" 
-                            />
-                        </div>
-                    </div>
-                    
-                    {/* 远程视频 */}
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all" />
-                        <div className="relative bg-black rounded-xl overflow-hidden border border-white/20 shadow-2xl">
-                            <div className="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full animate-pulse ${
-                                    peerLeft ? 'bg-gray-400' : 'bg-green-400'
+            <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-4 pb-28 pt-4 sm:px-6 lg:px-8">
+                <header className="glass-panel mb-5 rounded-[1.75rem] px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${
+                                connectionStatus === 'connected'
+                                    ? 'bg-emerald-400/12 text-emerald-100'
+                                    : connectionStatus === 'connecting'
+                                        ? 'bg-amber-400/12 text-amber-100'
+                                        : 'bg-red-400/12 text-red-100'
+                            }`}>
+                                <span className={`h-2.5 w-2.5 rounded-full ${
+                                    connectionStatus === 'connected'
+                                        ? 'bg-emerald-300'
+                                        : connectionStatus === 'connecting'
+                                            ? 'bg-amber-300'
+                                            : 'bg-red-300'
                                 }`} />
-                                <span className="text-sm font-medium">对方</span>
-                                {!peerVolume && !peerLeft && <span className="text-red-400">🔇</span>}
-                                {peerLeft && <span className="text-gray-400">离线</span>}
+                                {connectionStatus === 'connected' ? '信令已连接' :
+                                    connectionStatus === 'connecting' ? '正在连接' : '连接断开'}
                             </div>
-                            <video 
-                                ref={remoteVideoRef} 
-                                autoPlay 
-                                playsInline 
-                                className="w-full aspect-video bg-black object-cover" 
+                            <div className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-sm text-slate-200">
+                                房间 <span className="ml-1 font-mono text-white">{roomId}</span>
+                            </div>
+                            <div className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-sm text-slate-200">
+                                时长 <span className="ml-1 font-medium text-white">{formatDuration(callSeconds)}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={copyToClipboard} className="ghost-button rounded-full px-4 py-2 text-sm transition hover:bg-white/12">
+                                {copied ? "已复制房间号" : "复制房间号"}
+                            </button>
+                            <button onClick={shareRoom} className="ghost-button rounded-full px-4 py-2 text-sm transition hover:bg-white/12">
+                                {shareCopied ? "链接已复制" : "分享房间链接"}
+                            </button>
+                            <button
+                                onClick={() => setFocusMode(prev => !prev)}
+                                className="ghost-button rounded-full px-4 py-2 text-sm transition hover:bg-white/12"
+                            >
+                                {focusMode ? "退出专注模式" : "专注模式"}
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <section className={`grid flex-1 gap-5 ${focusMode ? "lg:grid-cols-[1fr_320px]" : "lg:grid-cols-[1.25fr_0.75fr]"}`}>
+                    <div className="relative order-2 flex min-h-[420px] flex-col gap-4 lg:order-1">
+                        <article className="glass-panel relative flex-1 overflow-hidden rounded-[2rem] border border-white/12">
+                            <video
+                                ref={remoteVideoRef}
+                                autoPlay
+                                playsInline
+                                className="h-full min-h-[420px] w-full bg-slate-950 object-cover"
                             />
+
+                            <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4 sm:p-5">
+                                <div className="rounded-2xl bg-black/45 px-4 py-3 backdrop-blur-md">
+                                    <div className="flex items-center gap-2 text-sm text-slate-200">
+                                        <span className={`h-2.5 w-2.5 rounded-full ${peerLeft ? "bg-slate-400" : "bg-emerald-300"}`} />
+                                        {remoteStatusLabel}
+                                    </div>
+                                    <div className="mt-1 text-lg font-semibold text-white">远端画面</div>
+                                </div>
+
+                                {!peerVolume && !peerLeft && (
+                                    <div className="rounded-full bg-black/45 px-3 py-2 text-sm text-red-100 backdrop-blur-md">
+                                        对方已静音
+                                    </div>
+                                )}
+                            </div>
+
                             {peerLeft && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                                    <div className="text-center">
-                                        <div className="text-4xl mb-2">⏳</div>
-                                        <p className="text-gray-400">等待对方加入...</p>
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/78">
+                                    <div className="mx-6 max-w-sm text-center">
+                                        <div className="mb-4 text-5xl">等待</div>
+                                        <h2 className="text-2xl font-semibold text-white">对方还没有加入房间</h2>
+                                        <p className="mt-3 text-sm leading-6 text-slate-300">
+                                            你可以先复制房间号或分享链接，对方加入后会自动建立通话连接。
+                                        </p>
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </div>
-                </div>
 
-                {/* 控制按钮区域 */}
-                <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10">
-                    <div className="container mx-auto px-4 py-4">
-                        <div className="flex flex-wrap items-center justify-center gap-3">
-                            {/* 音频按钮 */}
-                            <button 
-                                onClick={toggleMute} 
-                                className={`px-6 py-3 rounded-xl font-medium transition-all transform hover:scale-105 flex items-center gap-2 ${
-                                    isMuted 
-                                        ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25' 
-                                        : 'bg-gray-700 hover:bg-gray-600 text-white'
-                                }`}
+                            <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
+                                <div className="max-w-[70%] rounded-2xl bg-black/45 px-4 py-3 text-sm text-slate-100 backdrop-blur-md">
+                                    <div className="mb-1 text-xs uppercase tracking-[0.18em] text-slate-300">Live Subtitle</div>
+                                    <div className="line-clamp-2 min-h-[2.5rem] text-sm leading-6">
+                                        {subtitle || "开启录制后，这里会展示实时字幕预览。"}
+                                    </div>
+                                </div>
+
+                                <div className="hidden rounded-2xl bg-black/45 px-4 py-3 text-right text-sm text-slate-200 backdrop-blur-md sm:block">
+                                    <div>{displayName}</div>
+                                    <div className="mt-1 text-xs text-slate-400">{videoEnabled ? "摄像头开启" : "摄像头关闭"}</div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article className="glass-panel absolute bottom-4 right-4 z-20 w-36 overflow-hidden rounded-[1.5rem] border border-white/12 shadow-2xl sm:w-44 lg:static lg:w-full lg:rounded-[2rem]">
+                            <div className="absolute left-3 top-3 z-10 rounded-full bg-black/55 px-3 py-1 text-xs text-slate-100 backdrop-blur-md">
+                                {displayName}
+                            </div>
+                            <video
+                                ref={localVideoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="aspect-[4/5] w-full bg-slate-950 object-cover lg:aspect-video"
+                            />
+                            <div className="flex items-center justify-between border-t border-white/10 bg-slate-950/65 px-4 py-3 text-sm text-slate-200">
+                                <span>{isMuted ? "麦克风关闭" : "麦克风开启"}</span>
+                                <span>{videoEnabled ? "视频开启" : "视频关闭"}</span>
+                            </div>
+                        </article>
+                    </div>
+
+                    {!focusMode && (
+                        <aside className="order-1 flex flex-col gap-4 lg:order-2">
+                            <section className="glass-panel rounded-[2rem] p-5">
+                                <div className="mb-4">
+                                    <div className="text-sm uppercase tracking-[0.18em] text-slate-300">Session</div>
+                                    <h2 className="mt-2 text-2xl font-semibold text-white">会议面板</h2>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                                        <div className="text-sm text-slate-300">房间链接</div>
+                                        <div className="mt-2 break-all text-sm leading-6 text-white/90">{roomLink || "正在生成链接..."}</div>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                                        <div className="text-sm text-slate-300">当前状态</div>
+                                        <div className="mt-2 text-lg font-semibold text-white">{peerLeft ? "等待成员" : "已进入通话"}</div>
+                                        <div className="mt-1 text-sm text-slate-300">
+                                            {recording ? "录制进行中" : "可随时开始录制"}
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="glass-panel rounded-[2rem] p-5">
+                                <div className="mb-4 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm uppercase tracking-[0.18em] text-slate-300">Quick Notes</div>
+                                        <h3 className="mt-2 text-xl font-semibold text-white">使用提示</h3>
+                                    </div>
+                                </div>
+                                <div className="space-y-3 text-sm leading-6 text-slate-300">
+                                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                                        手机端建议竖屏使用，底部按钮区已经加大触控面积。
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                                        如果对方暂未加入，可以直接点击“分享房间链接”发给对方。
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-white/6 p-4">
+                                        录制会把双路画面与字幕一起保存成本地 `webm` 文件。
+                                    </div>
+                                </div>
+                            </section>
+                        </aside>
+                    )}
+                </section>
+
+                <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-slate-950/78 px-4 py-4 backdrop-blur-2xl">
+                    <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-3 sm:gap-4">
+                        <button
+                            onClick={toggleMute}
+                            className={`min-w-[9rem] rounded-2xl px-5 py-3 text-sm font-medium transition ${
+                                isMuted ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "ghost-button hover:bg-white/12"
+                            }`}
+                        >
+                            {isMuted ? "打开麦克风" : "静音"}
+                        </button>
+
+                        <button
+                            onClick={toggleVideo}
+                            className={`min-w-[9rem] rounded-2xl px-5 py-3 text-sm font-medium transition ${
+                                !videoEnabled ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "ghost-button hover:bg-white/12"
+                            }`}
+                        >
+                            {videoEnabled ? "关闭视频" : "开启视频"}
+                        </button>
+
+                        {!recording ? (
+                            <button
+                                onClick={startCanvasRecording}
+                                className="accent-button min-w-[9rem] rounded-2xl px-5 py-3 text-sm font-medium transition hover:-translate-y-0.5"
                             >
-                                {isMuted ? '🎤 取消静音' : '🔇 静音'}
+                                开始录制
                             </button>
-                            
-                            {/* 视频按钮 */}
-                            <button 
-                                onClick={toggleVideo} 
-                                className={`px-6 py-3 rounded-xl font-medium transition-all transform hover:scale-105 flex items-center gap-2 ${
-                                    !videoEnabled 
-                                        ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/25' 
-                                        : 'bg-gray-700 hover:bg-gray-600 text-white'
-                                }`}
+                        ) : (
+                            <button
+                                onClick={stopRecording}
+                                className="rounded-2xl bg-amber-400 px-5 py-3 text-sm font-medium text-slate-950 transition hover:-translate-y-0.5"
                             >
-                                {videoEnabled ? '📹 关闭视频' : '📷 开启视频'}
+                                停止录制
                             </button>
-                            
-                            {/* 录制按钮 */}
-                            {!recording ? (
-                                <button 
-                                    onClick={startCanvasRecording} 
-                                    className="px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-medium transition-all transform hover:scale-105 shadow-lg shadow-purple-500/25 flex items-center gap-2"
-                                >
-                                    🔴 开始录制
-                                </button>
-                            ) : (
-                                <button 
-                                    onClick={stopRecording} 
-                                    className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl font-medium transition-all transform hover:scale-105 shadow-lg shadow-yellow-500/25 flex items-center gap-2 animate-pulse"
-                                >
-                                    ⏹️ 停止录制
-                                </button>
-                            )}
-                            
-                            {/* 离开按钮 */}
-                            <button 
-                                onClick={leaveMeeting} 
-                                className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium transition-all transform hover:scale-105 shadow-lg shadow-red-500/25 flex items-center gap-2"
-                            >
-                                📞 离开会议
-                            </button>
-                        </div>
+                        )}
+
+                        <button
+                            onClick={leaveMeeting}
+                            className="rounded-2xl bg-red-500 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-red-500/20 transition hover:-translate-y-0.5"
+                        >
+                            离开会议
+                        </button>
                     </div>
                 </div>
             </div>
