@@ -8,6 +8,30 @@ import { useSubtitleRecognizer } from "@/hooks/useSubtitleRecognizer";
 
 type LoggerData = Record<string, unknown> | string | number | boolean | null | undefined;
 
+const buildIceServers = (): RTCIceServer[] => {
+    const stunServers = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+    ];
+
+    const turnUrl = process.env.NEXT_PUBLIC_TURN_SERVER_URL;
+    const turnUsername = process.env.NEXT_PUBLIC_TURN_SERVER_USERNAME;
+    const turnCredential = process.env.NEXT_PUBLIC_TURN_SERVER_CREDENTIAL;
+
+    if (!turnUrl || !turnUsername || !turnCredential) {
+        return stunServers;
+    }
+
+    return [
+        ...stunServers,
+        {
+            urls: turnUrl,
+            username: turnUsername,
+            credential: turnCredential,
+        },
+    ];
+};
+
 // 日志工具
 const logger = {
     info: (message: string, data?: LoggerData) => {
@@ -48,6 +72,7 @@ export default function RoomContent() {
     const [callSeconds, setCallSeconds] = useState(0);
     const [displayName, setDisplayName] = useState("你");
     const [focusMode, setFocusMode] = useState(false);
+    const [networkHint, setNetworkHint] = useState("正在初始化连接");
 
     // 录制相关的 ref
     const mediaRecorderRef = useRef<MediaRecorder | null>(null); // 媒体录制器引用
@@ -133,46 +158,65 @@ export default function RoomContent() {
     // 核心的 WebRTC 连接逻辑
     useEffect(() => {
         if (!roomId) return;
+
+        let cancelled = false;
         
         logger.info(`初始化房间 ${roomId}`);
         // 保存最近的房间ID
         localStorage.setItem("lastRoomId", roomId as string);
 
-        // 连接信令服务器
-        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://webrtc.peterroe.me/";
-        logger.info(`连接Socket服务器: ${socketUrl}`);
-        
-        socketRef.current = io(socketUrl);
-        
-        socketRef.current.on('connect', () => {
-            logger.info('Socket连接成功');
-            setConnectionStatus('connected');
-        });
-        
-        socketRef.current.on('disconnect', () => {
-            logger.warn('Socket连接断开');
-            setConnectionStatus('disconnected');
-        });
-        
-        // socketRef.current = io();
-        // 获取本地媒体流
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            logger.error('浏览器不支持媒体设备访问');
-            alert("无法访问媒体设备。请确保您使用 HTTPS 协议或 localhost 访问，并且浏览器支持 WebRTC。");
-            return;
-        }
+        const setupRoom = async () => {
+            try {
+                let socketTarget: string | undefined = process.env.NEXT_PUBLIC_SOCKET_URL;
 
-        logger.info('请求本地媒体流');
-        navigator.mediaDevices
-            .getUserMedia({
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 },
-                },
-                audio: true,
-            })
-            .then(stream => {
+                if (!socketTarget) {
+                    logger.info("未配置 NEXT_PUBLIC_SOCKET_URL，改为使用当前站点的内置 Socket 服务");
+                    setNetworkHint("使用当前站点信令服务");
+                    await fetch("/api/server");
+                    socketTarget = window.location.origin;
+                } else {
+                    setNetworkHint("使用外部信令服务");
+                }
+
+                logger.info(`连接Socket服务器: ${socketTarget}`);
+
+                socketRef.current = io(socketTarget, {
+                    transports: ["websocket", "polling"],
+                });
+
+                socketRef.current.on('connect', () => {
+                    logger.info('Socket连接成功');
+                    setConnectionStatus('connected');
+                    setNetworkHint("信令已连接，等待 WebRTC 建立");
+                });
+
+                socketRef.current.on('disconnect', () => {
+                    logger.warn('Socket连接断开');
+                    setConnectionStatus('disconnected');
+                    setNetworkHint("信令连接已断开");
+                });
+
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    logger.error('浏览器不支持媒体设备访问');
+                    alert("无法访问媒体设备。请确保您使用 HTTPS 协议或 localhost 访问，并且浏览器支持 WebRTC。");
+                    return;
+                }
+
+                logger.info('请求本地媒体流');
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 },
+                    },
+                    audio: true,
+                });
+
+                if (cancelled) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+
                 logger.info('本地媒体流获取成功', { 
                     videoTracks: stream.getVideoTracks().length,
                     audioTracks: stream.getAudioTracks().length 
@@ -185,11 +229,13 @@ export default function RoomContent() {
                 // 创建 WebRTC 连接
                 logger.info('创建RTCPeerConnection');
                 peerRef.current = new RTCPeerConnection({
-                    iceServers: [
-                        { urls: "stun:stun.l.google.com:19302" },
-                        { urls: "stun:stun1.l.google.com:19302" },
-                    ],
+                    iceServers: buildIceServers(),
                 });
+
+                if (!process.env.NEXT_PUBLIC_TURN_SERVER_URL) {
+                    logger.warn("当前未配置 TURN，只能依赖 STUN；两台手机在复杂网络下可能无法互通");
+                    setNetworkHint("已连接信令，未配置 TURN 时移动网络可能无法互通");
+                }
                 
                 // 添加本地媒体轨道到连接中
                 stream.getTracks().forEach(track => {
@@ -202,6 +248,7 @@ export default function RoomContent() {
                     logger.info('收到远程视频流', { streams: event.streams.length });
                     remoteStreamRef.current = event.streams[0];
                     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
+                    setNetworkHint("已收到远端媒体流");
                 };
 
                 // ICE 候选处理
@@ -218,8 +265,18 @@ export default function RoomContent() {
                     logger.info('WebRTC连接状态变化', { state });
                     if (state === 'connected') {
                         setPeerLeft(false);
+                        setNetworkHint("音视频连接已建立");
                     } else if (state === 'disconnected' || state === 'failed') {
                         setPeerLeft(true);
+                        setNetworkHint("WebRTC 连接失败，通常是网络或 TURN 配置问题");
+                    }
+                };
+
+                peerRef.current.oniceconnectionstatechange = () => {
+                    const iceState = peerRef.current?.iceConnectionState;
+                    logger.info("ICE 连接状态变化", { iceState });
+                    if (iceState === "failed") {
+                        setNetworkHint("ICE 协商失败，建议配置 TURN 服务器");
                     }
                 };
 
@@ -279,6 +336,7 @@ export default function RoomContent() {
                     logger.warn('对方用户离开');
                     setPeerLeft(true);
                     setPeerVolume(true);
+                    setNetworkHint("对方已离开房间");
                     remoteStreamRef.current = null;
                     if (remoteVideoRef.current) {
                         remoteVideoRef.current.srcObject = null;
@@ -290,14 +348,18 @@ export default function RoomContent() {
                     logger.info('对方音频状态变化', { isAudioEnabled });
                     setPeerVolume(isAudioEnabled);
                 });
-            })
-            .catch(error => {
+            } catch (error) {
                 logger.error('获取本地媒体流失败', error);
-                alert('无法访问摄像头和麦克风，请检查权限设置');
-            });
+                setNetworkHint("初始化失败，请检查媒体权限和信令地址");
+                alert('无法访问摄像头、麦克风，或信令服务初始化失败，请检查权限和配置');
+            }
+        };
+
+        setupRoom();
 
         // 清理函数
         return () => {
+            cancelled = true;
             logger.info('清理资源，离开房间');
             cleanupRoomResources(roomId);
         };
@@ -647,6 +709,9 @@ export default function RoomContent() {
                                         <div className="mt-2 text-lg font-semibold text-white">{peerLeft ? "等待成员" : "已进入通话"}</div>
                                         <div className="mt-1 text-sm text-slate-300">
                                             {recording ? "录制进行中" : "可随时开始录制"}
+                                        </div>
+                                        <div className="mt-2 text-sm leading-6 text-cyan-100/90">
+                                            {networkHint}
                                         </div>
                                     </div>
                                 </div>
