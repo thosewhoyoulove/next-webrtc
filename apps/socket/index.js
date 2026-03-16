@@ -23,42 +23,62 @@ io.engine.on("connection_error", err => {
 });
 
 io.on("connection", socket => {
+    let currentRoomId = null;
+
     socket.on("join-room", roomId => {
+        if (currentRoomId) {
+            socket.leave(currentRoomId);
+        }
+
+        currentRoomId = roomId;
         socket.join(roomId);
         socket.to(roomId).emit("user-joined", socket.id);
+    });
 
-        socket.on("offer", data => {
-            socket.to(roomId).emit("offer", data);
-        });
+    socket.on("offer", data => {
+        if (currentRoomId) {
+            socket.to(currentRoomId).emit("offer", data);
+        }
+    });
 
-        socket.on("answer", data => {
-            socket.to(roomId).emit("answer", data);
-        });
+    socket.on("answer", data => {
+        if (currentRoomId) {
+            socket.to(currentRoomId).emit("answer", data);
+        }
+    });
 
-        socket.on("ice-candidate", data => {
-            socket.to(roomId).emit("ice-candidate", data);
-        });
+    socket.on("ice-candidate", data => {
+        if (currentRoomId) {
+            socket.to(currentRoomId).emit("ice-candidate", data);
+        }
+    });
 
-        // 处理音频状态变化
-        socket.on("toggle-audio", data => {
-            console.log(`用户 ${socket.id} ${data.isAudioEnabled ? "打开" : "关闭"}了音频`);
-            socket.to(roomId).emit("user-audio-toggle", {
-                userId: socket.id,
-                isAudioEnabled: data.isAudioEnabled,
-            });
-        });
+    socket.on("toggle-audio", data => {
+        if (!currentRoomId) return;
 
-        // 监听用户离开房间
-        socket.on("leave-room", () => {
-            console.log(`用户 ${socket.id} 离开了房间 ${roomId}`);
-            socket.to(roomId).emit("user-left");
-            socket.leave(roomId);
+        console.log(`用户 ${socket.id} ${data.isAudioEnabled ? "打开" : "关闭"}了音频`);
+        socket.to(currentRoomId).emit("user-audio-toggle", {
+            userId: socket.id,
+            isAudioEnabled: data.isAudioEnabled,
         });
+    });
+
+    socket.on("leave-room", () => {
+        if (!currentRoomId) return;
+
+        console.log(`用户 ${socket.id} 离开了房间 ${currentRoomId}`);
+        socket.to(currentRoomId).emit("user-left");
+        socket.leave(currentRoomId);
+        currentRoomId = null;
     });
 
     // 处理断开连接
     socket.on("disconnect", () => {
+        if (currentRoomId) {
+            socket.to(currentRoomId).emit("user-left");
+        }
         console.log(`用户 ${socket.id} 断开连接`);
+        currentRoomId = null;
     });
 });
 

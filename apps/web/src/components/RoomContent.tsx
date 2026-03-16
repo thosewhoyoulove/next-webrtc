@@ -1,20 +1,22 @@
 // src/components/RoomContent.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import io, { Socket } from "socket.io-client";
 import { useSubtitleRecognizer } from "@/hooks/useSubtitleRecognizer";
 
+type LoggerData = Record<string, unknown> | string | number | boolean | null | undefined;
+
 // 日志工具
 const logger = {
-    info: (message: string, data?: any) => {
+    info: (message: string, data?: LoggerData) => {
         console.log(`[WebRTC-Info] ${message}`, data || '');
     },
-    error: (message: string, error?: any) => {
+    error: (message: string, error?: unknown) => {
         console.error(`[WebRTC-Error] ${message}`, error || '');
     },
-    warn: (message: string, data?: any) => {
+    warn: (message: string, data?: LoggerData) => {
         console.warn(`[WebRTC-Warn] ${message}`, data || '');
     }
 };
@@ -30,6 +32,9 @@ export default function RoomContent() {
     // WebRTC 相关的 ref
     const socketRef = useRef<Socket | null>(null); // Socket.io 连接引用
     const peerRef = useRef<RTCPeerConnection | null>(null); // WebRTC 连接引用
+    const localStreamRef = useRef<MediaStream | null>(null);
+    const remoteStreamRef = useRef<MediaStream | null>(null);
+    const subtitleRef = useRef("");
 
     // UI 状态管理
     const [isMuted, setIsMuted] = useState(false); // 静音状态
@@ -49,6 +54,51 @@ export default function RoomContent() {
     const { subtitle, startRecognition, stopRecognition } = useSubtitleRecognizer("zh-CN");
     //获取对方的音量是否开关
     const [peerVolume, setPeerVolume] = useState(true);
+
+    useEffect(() => {
+        subtitleRef.current = subtitle;
+    }, [subtitle]);
+
+    const cleanupRoomResources = useCallback((currentRoomId?: string | string[]) => {
+        const room = typeof currentRoomId === "string" ? currentRoomId : undefined;
+
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+            mediaRecorderRef.current.stop();
+        }
+
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = undefined;
+        }
+
+        stopRecognition();
+        setRecording(false);
+
+        if (room) {
+            socketRef.current?.emit("leave-room", room);
+        }
+
+        socketRef.current?.removeAllListeners();
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+
+        peerRef.current?.close();
+        peerRef.current = null;
+
+        localStreamRef.current?.getTracks().forEach(track => track.stop());
+        remoteStreamRef.current?.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+        remoteStreamRef.current = null;
+
+        if (localVideoRef.current) {
+            localVideoRef.current.srcObject = null;
+        }
+
+        if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = null;
+        }
+    }, [stopRecognition]);
+
     // 核心的 WebRTC 连接逻辑
     useEffect(() => {
         if (!roomId) return;
@@ -99,10 +149,16 @@ export default function RoomContent() {
                 
                 // 设置本地视频流
                 if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+                localStreamRef.current = stream;
 
                 // 创建 WebRTC 连接
                 logger.info('创建RTCPeerConnection');
-                peerRef.current = new RTCPeerConnection();
+                peerRef.current = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: "stun:stun.l.google.com:19302" },
+                        { urls: "stun:stun1.l.google.com:19302" },
+                    ],
+                });
                 
                 // 添加本地媒体轨道到连接中
                 stream.getTracks().forEach(track => {
@@ -113,6 +169,7 @@ export default function RoomContent() {
                 // 处理远程视频流
                 peerRef.current.ontrack = event => {
                     logger.info('收到远程视频流', { streams: event.streams.length });
+                    remoteStreamRef.current = event.streams[0];
                     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0];
                 };
 
@@ -209,10 +266,9 @@ export default function RoomContent() {
         // 清理函数
         return () => {
             logger.info('清理资源，离开房间');
-            socketRef.current?.emit("leave-room", roomId);
-            peerRef.current?.close();
+            cleanupRoomResources(roomId);
         };
-    }, [roomId]);
+    }, [cleanupRoomResources, roomId]);
 
     // 音频控制：切换静音状态
     const toggleMute = () => {
@@ -274,8 +330,7 @@ export default function RoomContent() {
     // 离开会议
     const leaveMeeting = () => {
         logger.info('用户主动离开会议');
-        socketRef.current?.emit("leave-room", roomId);
-        peerRef.current?.close();
+        cleanupRoomResources(roomId);
         router.push("/");
     };
 
@@ -283,9 +338,13 @@ export default function RoomContent() {
     const startCanvasRecording = () => {
         const localVideo = localVideoRef.current;
         const remoteVideo = remoteVideoRef.current;
-        if (!localVideo || !remoteVideo) {
+        const localStream = localStreamRef.current;
+        const remoteStream = remoteStreamRef.current;
+        const remoteVideoReady = remoteVideo && remoteVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+
+        if (!localVideo || !remoteVideo || !localStream || !remoteStream || !remoteVideoReady) {
             logger.warn('视频未准备好，无法开始录制');
-            return alert("视频还没准备好");
+            return alert("双方视频都准备好后才能开始录制");
         }
 
         logger.info('开始录制会议');
@@ -317,7 +376,7 @@ export default function RoomContent() {
             ctx.fillStyle = "white";
             ctx.font = "bold 24px Arial";
             ctx.textAlign = "center";
-            ctx.fillText(subtitle, 640, 710);
+            ctx.fillText(subtitleRef.current, 640, 710);
 
             // 请求下一帧
             animationFrameRef.current = requestAnimationFrame(drawFrame);
@@ -330,8 +389,6 @@ export default function RoomContent() {
 
         // 创建音频流
         const audioStream = new MediaStream();
-        const localStream = localVideo.srcObject as MediaStream;
-        const remoteStream = remoteVideo.srcObject as MediaStream;
 
         // 合并本地和远程的音频轨道
         localStream.getAudioTracks().forEach(track => audioStream.addTrack(track));
@@ -355,13 +412,17 @@ export default function RoomContent() {
 
         // 录制结束时的处理
         mediaRecorder.onstop = () => {
-            cancelAnimationFrame(animationFrameRef.current!);
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = undefined;
+            }
             const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
             a.download = `recording-${Date.now()}.webm`;
             a.click();
+            URL.revokeObjectURL(url);
         };
 
         // 开始录制
@@ -471,7 +532,7 @@ export default function RoomContent() {
                                     peerLeft ? 'bg-gray-400' : 'bg-green-400'
                                 }`} />
                                 <span className="text-sm font-medium">对方</span>
-                                {!peerVolume && !peerLeft && <span className="text-red-400">�</span>}
+                                {!peerVolume && !peerLeft && <span className="text-red-400">🔇</span>}
                                 {peerLeft && <span className="text-gray-400">离线</span>}
                             </div>
                             <video 
