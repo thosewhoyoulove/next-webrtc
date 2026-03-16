@@ -7,6 +7,8 @@ import io, { Socket } from "socket.io-client";
 import { useSubtitleRecognizer } from "@/hooks/useSubtitleRecognizer";
 
 type LoggerData = Record<string, unknown> | string | number | boolean | null | undefined;
+const DEFAULT_SOCKET_URL = "https://webrtc2.peterroe.me";
+const USE_LOCAL_SOCKET = process.env.NEXT_PUBLIC_USE_LOCAL_SOCKET === "true";
 
 const buildIceServers = (): RTCIceServer[] => {
     const stunServers = [
@@ -167,11 +169,11 @@ export default function RoomContent() {
 
         const setupRoom = async () => {
             try {
-                let socketTarget: string | undefined = process.env.NEXT_PUBLIC_SOCKET_URL;
+                let socketTarget = process.env.NEXT_PUBLIC_SOCKET_URL || DEFAULT_SOCKET_URL;
 
-                if (!socketTarget) {
-                    logger.info("未配置 NEXT_PUBLIC_SOCKET_URL，改为使用当前站点的内置 Socket 服务");
-                    setNetworkHint("使用当前站点信令服务");
+                if (USE_LOCAL_SOCKET) {
+                    logger.info("已启用本地 Socket 模式，使用当前站点内置信令服务");
+                    setNetworkHint("使用本地信令服务");
                     await fetch("/api/server");
                     socketTarget = window.location.origin;
                 } else {
